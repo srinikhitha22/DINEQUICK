@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Table {{ table_id }} | Menu Card</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-light">
+    
+    {{ navbar_html|safe }}
+
+    <div class="container px-md-4" style="max-width: 900px;">
+        
+        {% if alert_box_data %}
+        <div class="alert alert-{{ alert_box_data.color }} shadow-sm text-center fw-bold mb-4">
+            🔔 Live Round Notification: Your order status is currently: 
+            <span class="text-uppercase border-bottom">{{ alert_box_data.status }}</span>!
+            {% if alert_box_data.status == 'Served' %}
+                <br><a href="/bill_generation/{{ alert_box_data.order_id }}" class="btn btn-sm btn-dark mt-2">🧾 View & Scan Pay Bill</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="card p-4 border-0 text-white shadow mb-4" style="background: linear-gradient(135deg, #d35400, #e67e22); border-radius: 15px;">
+            <h4 class="fw-bold mb-0">Table #{ { table_id } } Digital Menu Card</h4>
+            <p class="mb-0 opacity-75 small">Logged in accounts can fire multiple rounds of food orders directly to cooking production.</p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-7">
+                <h5 class="fw-bold text-secondary mb-3">🍛 Premium Food Portfolio</h5>
+                {% for item in menu_items %}
+                <div class="card p-3 mb-2 border-0 shadow-sm d-flex flex-row justify-content-between align-items-center bg-white">
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">{{ item.name }}</h6>
+                        <span class="text-muted small text-success fw-bold">₹{{ item.price }}</span>
+                    </div>
+                    <button class="btn btn-danger btn-sm rounded-pill px-3 fw-bold" onclick="addItemToBasket('{{ item.id }}', '{{ item.name }}', {{ item.price }})">+ Add</button>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="col-md-5">
+                <div class="card p-3 border-0 shadow-sm sticky-top" style="top: 20px; border-radius:12px; background: white;">
+                    <h5 class="fw-bold text-dark mb-3">Interactive Cart</h5>
+                    <div id="basket-box" class="small text-muted mb-3">Your cart is empty.</div>
+                    <div class="d-flex justify-content-between fw-bold border-top pt-2 mb-3">
+                        <span>Subtotal:</span>
+                        <span id="subtotal-tag" class="text-success">₹0</span>
+                    </div>
+                    
+                    {% if session.get('user_logged_in') %}
+                        <button class="btn btn-warning w-100 fw-bold rounded-pill shadow-sm" onclick="dispatchOrderToServer()">🔥 Place Order To Kitchen</button>
+                    {% else %}
+                        <div class="alert alert-warning text-center small p-2 mb-2">⚠️ You must register/login to place an order round!</div>
+                        <a href="/user/login/{{ table_id }}" class="btn btn-dark w-100 fw-bold rounded-pill shadow-sm">🔑 Login / Sign Up</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let localBasket = {};
+        const tableId = {{ table_id }};
+        const isUserLoggedIn = {{ 'true' if session.get('user_logged_in') else 'false' }};
+
+        function addItemToBasket(id, name, price) {
+            if(localBasket[id]) { 
+                localBasket[id].qty += 1; 
+            } else { 
+                localBasket[id] = { name: name, price: price, qty: 1 }; 
+            }
+            renderBasketView();
+        }
+
+        function cancelItemFromBasket(id) {
+            if(localBasket[id]) { 
+                localBasket[id].qty -= 1; 
+                if(localBasket[id].qty <= 0) { delete localBasket[id]; } 
+            }
+            renderBasketView();
+        }
+
+        function renderBasketView() {
+            const box = document.getElementById('basket-box');
+            let total = 0; 
+            box.innerHTML = "";
+            
+            if(Object.keys(localBasket).length === 0) { 
+                box.innerHTML = "Your cart is empty."; 
+                document.getElementById('subtotal-tag').innerText = "₹0"; 
+                return; 
+            }
+            
+            for(let id in localBasket) {
+                let item = localBasket[id]; 
+                total += item.price * item.qty;
+                box.innerHTML += `
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                        <div>
+                            <span class="d-block text-dark fw-bold">${item.name}</span>
+                            <small class="text-muted">${item.qty}x @ ₹${item.price}</small>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="fw-bold me-1 text-dark">₹${item.price * item.qty}</span>
+                            <button class="btn btn-outline-danger btn-sm rounded-circle py-0 px-2" style="font-size: 11px;" onclick="cancelItemFromBasket('${id}')">🗑️</button>
+                        </div>
+                    </div>`;
+            }
+            document.getElementById('subtotal-tag').innerText = "₹" + total;
+        }
+
+        function dispatchOrderToServer() {
+            if(!isUserLoggedIn) { return alert("Please log in first before attempting checkout!"); }
+            if(Object.keys(localBasket).length === 0) return alert("Select menu items first!");
+            
+            fetch('/api/submit_order', {
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table_id: tableId, cart_data: localBasket })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) { 
+                    alert("🚀 Round Sent! Order injected into workers terminal."); 
+                    window.location.reload(); 
+                }
+            });
+        }
+    </script>
+</body>
+</html>

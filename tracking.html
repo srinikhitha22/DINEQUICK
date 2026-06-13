@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DineQuick | Order Tracking Pipeline</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .status-container { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .step-indicator { display: flex; justify-content: space-between; position: relative; margin-bottom: 30px; }
+        .step-indicator::before { content: ""; position: absolute; top: 20px; left: 10%; right: 10%; height: 4px; background: #dfe4ea; z-index: 1; }
+        .step-progress-line { position: absolute; top: 20px; left: 10%; height: 4px; background: #e67e22; z-index: 2; transition: width 0.4s ease; }
+        .step-node { width: 44px; height: 44px; border-radius: 50%; background: #dfe4ea; z-index: 3; display: flex; align-items: center; justify-content: center; color: #747d8c; font-weight: bold; transition: all 0.3s; }
+        .step-node.active { background: #e67e22; color: white; box-shadow: 0 0 0 5px rgba(230, 126, 34, 0.2); }
+        .step-node.completed { background: #2ed573; color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="container my-5 text-center">
+        <div class="mb-4">
+            <span class="badge bg-warning text-dark px-3 py-2 rounded-pill fw-bold mb-2">Order #{{ order.id }}</span>
+            <h2 class="fw-bold text-dark">Track Preparation Progress</h2>
+            <p class="text-muted">Table {{ order.table_id }} · Real-time pipeline updates</p>
+        </div>
+
+        <div class="status-container text-start max-width-600 mx-auto">
+            <div class="step-indicator">
+                <div class="step-progress-line" id="progress-line-bar" style="width: 0%;"></div>
+                <div class="step-node" id="node-Placed"><i class="fa-solid fa-receipt"></i></div>
+                <div class="step-node" id="node-Cooking"><i class="fa-solid fa-fire-burner"></i></div>
+                <div class="step-node" id="node-Served"><i class="fa-solid fa-bell"></i></div>
+            </div>
+
+            <div class="d-flex justify-content-between text-center mb-4 px-2 small fw-bold text-secondary">
+                <span>Placed</span>
+                <span>Cooking</span>
+                <span>Served</span>
+            </div>
+
+            <div class="alert alert-light border text-center py-3 mb-4" id="status-alert-box">
+                Current Status Vector: <strong class="text-orange" id="status-string-text">{{ order.status }}</strong>
+            </div>
+
+            <h6 class="fw-bold text-dark mb-3">Items in production:</h6>
+            <ul class="list-group list-group-flush">
+                {% for item in order.items %}
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0 bg-transparent">
+                    <span><strong class="text-dark">× {{ item.quantity }}</strong> {{ item.item_details.name }}</span>
+                    <span class="text-muted small">₹{{ item.price_at_order }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+        <a href="/table/{{ order.table_id }}" class="btn btn-outline-secondary mt-4 px-4 rounded-pill fw-semibold">Back to Menu</a>
+    </div>
+
+    <script>
+        const currentStatus = "{{ order.status }}";
+        
+        function coordinatePipelineGraphics(status) {
+            const line = document.getElementById('progress-line-bar');
+            const nPlaced = document.getElementById('node-Placed');
+            const nCooking = document.getElementById('node-Cooking');
+            const nServed = document.getElementById('node-Served');
+
+            if (status === 'Placed') {
+                line.style.width = '0%';
+                nPlaced.className = "step-node active";
+            } else if (status === 'Cooking') {
+                line.style.width = '50%';
+                nPlaced.className = "step-node completed";
+                nCooking.className = "step-node active";
+            } else if (status === 'Served') {
+                line.style.width = '80%';
+                nPlaced.className = "step-node completed";
+                nCooking.className = "step-node completed";
+                nServed.className = "step-node completed";
+            }
+        }
+
+        coordinatePipelineGraphics(currentStatus);
+
+        // Long Polling to refresh progress state vectors automatically
+        setInterval(() => {
+            window.location.reload();
+        }, 7000);
+    </script>
+</body>
+</html>

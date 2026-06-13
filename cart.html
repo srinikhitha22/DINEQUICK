@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DineQuick | Cart & Review</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', system-ui, sans-serif; }
+        .cart-header { background-color: #d35400; color: white; padding: 15px; border-bottom-left-radius: 15px; border-bottom-right-radius: 15px; }
+        .btn-orange { background-color: #d35400; color: white; width: 100%; border-radius: 10px; font-weight: bold; border: none; }
+        .btn-orange:hover { background-color: #b33900; color: white; }
+        .qty-circle { border-radius: 50%; border: 1px solid #d35400; color: #d35400; background: white; width: 28px; height: 28px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+    <div class="cart-header shadow-sm d-flex justify-content-between align-items-center container-fluid">
+        <h5 class="mb-0 fw-bold"><a href="/table/{{ table_id }}" class="text-white me-2 text-decoration-none"><i class="fa-solid fa-arrow-left"></i></a> Review Your Order</h5>
+        <span class="badge bg-white text-dark fw-bold py-2 px-3 rounded-pill">Table {{ table_id }}</span>
+    </div>
+
+    <div class="container my-4">
+        <div class="card p-3 shadow-sm border-0 mb-3" id="cart-list-container"></div>
+
+        <div class="card p-3 shadow-sm border-0 mb-4">
+            <h6 class="fw-bold text-muted mb-3"><i class="fa-solid fa-receipt me-2"></i>Bill Breakdown</h6>
+            <div class="d-flex justify-content-between mb-2">
+                <span class="text-secondary">Subtotal</span>
+                <span id="subtotal-display" class="fw-semibold">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2 text-muted small">
+                <span>CGST (2.5%)</span>
+                <span id="cgst-display">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2 text-muted small">
+                <span>SGST (2.5%)</span>
+                <span id="sgst-display">₹0.00</span>
+            </div>
+            <hr class="text-muted">
+            <div class="d-flex justify-content-between fw-bold fs-5 text-dark">
+                <span>Grand Total</span>
+                <span id="grand-total-display" class="text-success">₹0.00</span>
+            </div>
+        </div>
+
+        <button class="btn btn-orange py-3 shadow fs-5" onclick="dispatchOrderPipeline()">Place Order Directly <i class="fa-solid fa-paper-plane ms-2"></i></button>
+    </div>
+
+    <script>
+        const tableId = "{{ table_id }}";
+        let cartState = JSON.parse(localStorage.getItem('dinequick_cart')) || {};
+
+        function renderCartRows() {
+            const container = document.getElementById('cart-list-container');
+            container.innerHTML = "";
+            
+            if(Object.keys(cartState).length === 0) {
+                container.innerHTML = `<div class="text-center py-5 text-muted"><i class="fa-regular fa-folder-open fs-1 d-block mb-2"></i>Your cart is completely vacant.</div>`;
+                return;
+            }
+
+            for(let id in cartState) {
+                let item = cartState[id];
+                let div = document.createElement('div');
+                div.className = "d-flex justify-content-between align-items-center py-3 border-bottom";
+                div.innerHTML = `
+                    <div>
+                        <h6 class="mb-0 fw-bold text-dark">${item.name}</h6>
+                        <small class="text-muted">₹${item.price} each</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="qty-circle" onclick="alterQuantity('${id}', -1)">-</button>
+                        <span class="fw-bold px-1">${item.quantity}</span>
+                        <button class="qty-circle" onclick="alterQuantity('${id}', 1)">+</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            }
+            recalculateBillValues();
+        }
+
+        function alterQuantity(id, changeValue) {
+            if(cartState[id]) {
+                cartState[id].quantity += changeValue;
+                if(cartState[id].quantity <= 0) {
+                    delete cartState[id];
+                }
+                localStorage.setItem('dinequick_cart', JSON.stringify(cartState));
+                renderCartRows();
+            }
+        }
+
+        function recalculateBillValues() {
+            let subtotal = 0;
+            for(let id in cartState) {
+                subtotal += cartState[id].price * cartState[id].quantity;
+            }
+            let cgst = parseFloat((subtotal * 0.025).toFixed(2));
+            let sgst = parseFloat((subtotal * 0.025).toFixed(2));
+            let grandTotal = parseFloat((subtotal + cgst + sgst).toFixed(2));
+
+            document.getElementById('subtotal-display').innerText = `₹${subtotal.toFixed(2)}`;
+            document.getElementById('cgst-display').innerText = `₹${cgst.toFixed(2)}`;
+            document.getElementById('sgst-display').innerText = `₹${sgst.toFixed(2)}`;
+            document.getElementById('grand-total-display').innerText = `₹${grandTotal.toFixed(2)}`;
+        }
+
+        function dispatchOrderPipeline() {
+            const itemsArray = Object.keys(cartState).map(id => ({
+                menu_item_id: parseInt(id),
+                quantity: cartState[id].quantity
+            }));
+
+            if(itemsArray.length === 0) return alert("Your cart is empty!");
+
+            fetch('/api/order/place', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table_id: parseInt(tableId), items: itemsArray })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    localStorage.removeItem('dinequick_cart');
+                    window.location.href = `/table/order-tracking/${data.order_id}`;
+                }
+            }).catch(err => console.error("API Transmission Faulted:", err));
+        }
+
+        renderCartRows();
+    </script>
+</body>
+</html>

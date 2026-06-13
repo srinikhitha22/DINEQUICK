@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DineQuick | Live Kitchen Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background-color: #1e272e; color: #ffffff; font-family: system-ui, -apple-system, sans-serif; }
+        .navbar-kitchen { background-color: #2f3542; border-bottom: 3px solid #e67e22; }
+        .order-card { background-color: #2f3542; border: none; border-radius: 12px; color: white; }
+        .order-card.status-Placed { border-top: 6px solid #ff4757; }
+        .order-card.status-Cooking { border-top: 6px solid #ffa502; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-kitchen navbar-dark px-3 py-2 shadow-sm">
+        <span class="navbar-brand mb-0 h1 fw-bold text-warning"><i class="fa-solid fa-fire-burner me-2"></i>Live Kitchen Display Monitor Panel</span>
+        <span class="badge bg-danger rounded-pill px-3 py-2 fw-bold tracking-wider">LIVE DATA FEED</span>
+    </nav>
+
+    <div class="container-fluid my-4">
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+            {% for order in orders %}
+            <div class="col">
+                <div class="card order-card h-100 p-3 shadow status-{{ order.status }}">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h4 class="fw-bold mb-0 text-warning">Table {{ order.table_id }}</h4>
+                        <span class="badge {% if order.status == 'Placed' %}bg-danger{% else %}bg-warning text-dark{% endif %} px-2 py-1">{{ order.status }}</span>
+                    </div>
+                    <small class="text-muted">Order ID: #{{ order.id }}</small>
+                    <hr class="bg-secondary">
+                    
+                    <div class="flex-grow-1">
+                        <ul class="list-unstyled mb-0">
+                            {% for item in order.items %}
+                            <li class="py-1">
+                                <span class="fw-bold text-white fs-5">× {{ item.quantity }}</span> 
+                                <span class="text-light-50 ms-1">{{ item.item_details.name }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    
+                    <div class="mt-4">
+                        {% if order.status == 'Placed' %}
+                        <button class="btn btn-warning w-100 fw-bold text-dark py-2" onclick="mutateOrderState('{{ order.id }}', 'Cooking')">Start Cooking <i class="fa-solid fa-play ms-1"></i></button>
+                        {% elif order.status == 'Cooking' %}
+                        <button class="btn btn-success w-100 fw-bold py-2" onclick="mutateOrderState('{{ order.id }}', 'Served')">Mark Served <i class="fa-solid fa-check-double ms-1"></i></button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        function mutateOrderState(orderId, targetState) {
+            fetch(`/api/order/${orderId}/transition`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: targetState })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    window.location.reload();
+                }
+            }).catch(err => console.error("Pipeline failure trace:", err));
+        }
+
+        // Auto-refresh the kitchen panel screen views automatically
+        setInterval(() => {
+            window.location.reload();
+        }, 10000);
+    </script>
+</body>
+</html>
